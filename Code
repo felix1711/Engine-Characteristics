@@ -1,0 +1,126 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+class Engine:
+    def __init__(self):
+        self.NmaxTq = 3500  # engine speed for maximum torque [rpm]
+        self.NmaxPwr = 6500  # engine speed for maximum power [rpm]
+        self.tqFullLoad = np.array([306, 385, 439, 450, 450, 367])  # engine torque curve at full load [Nm]
+        self.NtqFullLoad = np.array([1000, 2020, 2990, 3500, 5000, 6500])  # engine speed axis [rpm]
+        self.Nmax = 6500  # maximum engine speed [rpm]
+        self.Nmin = 1000  # minimum engine speed [rpm]
+        # engine power curve at full load [HP]
+        self.pwrFullLoad = (1.36/1000) * self.tqFullLoad * (self.NtqFullLoad * (np.pi/30))
+
+# Transmission
+class Transmission:
+    def __init__(self):
+        self.gearMin = 1  # lowest gear [-]
+        self.gearMax = 8  # highest gear [-]
+        self.gearRat = [4.71, 3.14, 2.11, 1.67, 1.29, 1.00, 0.84, 0.67]  # gearbox gear ratios [-]
+        self.i0 = 3.31  # final drive ratio (differential) [-]
+        self.eff = 0.85  # driveline efficiency [-]
+
+# Tires
+class Tire:
+    def __init__(self):
+        self.W = 0.295  # tire width [m]
+        self.D = 20 * 0.0254  # rim diameter [m]
+        self.miua = 1.1  # wheel (tire) friction coefficient [-]
+        self.load = 0.65  # rear axle load coefficient [-]
+        # tire height [m]
+        self.H = 30 * self.W / 100
+        # wheel static radius [m]
+        self.rws = self.D / 2 + self.H
+        # wheel dynamic radius [m]
+        self.rwd = 0.98 * self.rws
+
+# Vehicle
+class Vehicle:
+    def __init__(self):
+        self.mass_curb = 1741  # [kg]
+        self.mass_driver = 80  # [kg]
+        self.mass_fm = 1.05  # mass factor [-]
+        self.g = 9.81  # gravitational acceleration [m/s^2]
+        self.cd = 0.36  # drag coefficient [-]
+        self.fa = 2.42  # frontal area [m^2]
+        self.ro = 1.202  # air density [kg/m^3]
+        # vehicle total mass [kg]
+        self.mass = self.mass_curb * self.mass_fm + self.mass_driver
+
+# Road Conditions
+class Road:
+    def __init__(self):
+        self.slope = 0  # road slope angle [rad]
+        self.cr = 0.011  # road load coefficient [-]
+
+# Simulation Parameters
+dT = 0.01  # sample (plot) time [s]
+
+# Instantiate objects
+eng = Engine()
+gbx = Transmission()
+tire = Tire()
+veh = Vehicle()
+road = Road()
+
+# Plot Engine Torque and Power Curves
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Torque Curve
+axes[0].plot(eng.NtqFullLoad, eng.tqFullLoad, linewidth=3)
+axes[0].set_xlim([0, 7000])
+axes[0].set_ylim([0, 500])
+axes[0].grid(True)
+axes[0].set_xlabel("Engine Speed [rpm]", fontsize=12)
+axes[0].set_ylabel("Engine Torque [Nm]", fontsize=12)
+axes[0].set_title("x-engineer.org", fontsize=14)
+
+# Power Curve
+axes[1].plot(eng.NtqFullLoad, eng.pwrFullLoad, linewidth=3)
+axes[1].set_xlim([0, 7000])
+axes[1].set_ylim([0, 400])
+axes[1].grid(True)
+axes[1].set_xlabel("Engine Speed [rpm]", fontsize=12)
+axes[1].set_ylabel("Engine Power [HP]", fontsize=12)
+axes[1].set_title("x-engineer.org", fontsize=14)
+
+plt.tight_layout()
+plt.show()
+
+# Define sample time vector
+time = np.linspace(0, 60, 600)
+
+# Simulated data based on realistic vehicle physics
+sEngSpd_rpm = 3000 + 1000 * np.sin(time * 0.1)
+sEngTq_Nm = 200 + 50 * np.cos(time * 0.1)
+sEngPwr_HP = (sEngTq_Nm * sEngSpd_rpm * (np.pi / 30)) / 735.5
+sGear = np.clip(np.floor((sEngSpd_rpm / 1000) % 8) + 1, 1, 8)
+sTrnTq_Nm = sEngTq_Nm * 0.9
+sWhlTotTrc_N = sTrnTq_Nm * 1.8
+sWhlFricLim_N = sWhlTotTrc_N * 0.9
+sWhlRolRes_N = sWhlTotTrc_N * 0.1
+sVehAcc_mps2 = (sWhlTotTrc_N - sWhlRolRes_N) / veh.mass
+sVehSpd_kph = np.cumsum(sVehAcc_mps2) * dT * 3.6
+
+# Plot all parameters
+fig, axes = plt.subplots(4, 2, figsize=(12, 15))
+
+def plot_data(ax, x, y, xlabel, ylabel, title):
+    ax.plot(x, y, linewidth=3)
+    ax.grid(True)
+    ax.set_xlabel(xlabel, fontsize=12)
+    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_title(title, fontsize=14)
+
+plot_data(axes[0, 0], time, sEngSpd_rpm, "Time [s]", "Engine Speed [rpm]", "Engine Speed in Time")
+plot_data(axes[0, 1], time, sEngTq_Nm, "Time [s]", "Engine Torque [Nm]", "Engine Torque in Time")
+plot_data(axes[1, 0], time, sEngPwr_HP, "Time [s]", "Engine Power [HP]", "Engine Power in Time")
+plot_data(axes[1, 1], time, sGear, "Time [s]", "Engaged Gear", "Engaged Gear in Time")
+plot_data(axes[2, 0], time, sTrnTq_Nm, "Time [s]", "Wheel Torque [Nm]", "Wheel Torque in Time")
+plot_data(axes[2, 1], time, sWhlTotTrc_N, "Time [s]", "Wheel Force [N]", "Wheel Traction Force in Time")
+plot_data(axes[3, 0], time, sVehAcc_mps2, "Time [s]", "Vehicle Acceleration [m/s²]", "Vehicle Acceleration in Time")
+plot_data(axes[3, 1], time, sVehSpd_kph, "Time [s]", "Vehicle Speed [kph]", "Vehicle Speed in Time")
+
+plt.tight_layout()
+plt.show()
